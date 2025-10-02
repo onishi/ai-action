@@ -221,6 +221,9 @@ const activePowerups = {
 // ピット（穴）の定義
 const stagePits = [];
 
+// フェーズゲート
+const phaseGates = [];
+
 // フローティングテキスト生成
 function addFloatingText(x, y, text, color = '#fff', size = 16) {
     floatingTexts.push({
@@ -1066,6 +1069,74 @@ function checkPitCollision() {
     return false;
 }
 
+function updatePhaseGates() {
+    if (playerGateCooldown > 0) {
+        playerGateCooldown -= 1;
+    }
+
+    for (let gate of phaseGates) {
+        if (gate.cooldown > 0) {
+            gate.cooldown -= 1;
+        }
+    }
+
+    for (let gate of phaseGates) {
+        if (gate.phase !== currentPhase) {
+            continue;
+        }
+        if (playerGateCooldown > 0 || gate.cooldown > 0) {
+            continue;
+        }
+
+        const gateRect = {
+            x: gate.x,
+            y: gate.y,
+            width: gate.width,
+            height: gate.height
+        };
+
+        if (!checkCollision(player, gateRect)) {
+            continue;
+        }
+
+        const targetGate = phaseGates.find(candidate => candidate.id === gate.link);
+        if (!targetGate) {
+            continue;
+        }
+
+        const targetCenterX = targetGate.x + targetGate.width / 2;
+        const targetCenterY = targetGate.y + targetGate.height / 2;
+
+        player.x = targetCenterX - player.width / 2;
+        player.y = targetCenterY - player.height / 2;
+        player.velocityY = Math.min(player.velocityY, -6);
+        player.velocityX *= 0.35;
+        player.onGround = false;
+        playerGateCooldown = PLAYER_GATE_COOLDOWN;
+        gate.cooldown = GATE_COOLDOWN_FRAMES;
+        targetGate.cooldown = GATE_COOLDOWN_FRAMES;
+        comboTimer = Math.max(comboTimer, 90);
+
+        player.x = Math.max(0, Math.min(player.x, STAGE_WIDTH - player.width));
+        player.y = Math.max(0, Math.min(player.y, canvas.height - player.height));
+
+        phaseRipples.push({
+            x: gate.x + gate.width / 2,
+            y: gate.y + gate.height / 2,
+            radius: 26,
+            alpha: 0.5,
+            phase: gate.phase
+        });
+        phaseRipples.push({
+            x: targetGate.x + targetGate.width / 2,
+            y: targetGate.y + targetGate.height / 2,
+            radius: 34,
+            alpha: 0.45,
+            phase: targetGate.phase
+        });
+    }
+}
+
 function updatePhaseShockwaves() {
     for (let i = phaseShockwaves.length - 1; i >= 0; i--) {
         const pulse = phaseShockwaves[i];
@@ -1211,10 +1282,11 @@ function loadStage(stageIndex) {
     levelPhases.SOLID.platforms = generatePlatformsForStage(STAGE_WIDTH, 'SOLID');
     levelPhases.ETHER.platforms = generatePlatformsForStage(STAGE_WIDTH, 'ETHER');
 
-    // アイテムとピットをリセット
+    // アイテムとピット・ゲートをリセット
     phaseOrbs.length = 0;
     phasePowerups.length = 0;
     stagePits.length = 0;
+    phaseGates.length = 0;
 
     // オーブを配置
     const orbCount = Math.floor(STAGE_WIDTH / 300) + 5;
@@ -1257,6 +1329,18 @@ function loadStage(stageIndex) {
             width: pitWidth,
             height: 50
         });
+    }
+
+    // ゲートを配置
+    const gateCount = Math.min(3, Math.floor(STAGE_WIDTH / 1200));
+    for (let i = 0; i < gateCount; i++) {
+        const baseX = (i + 1) * (STAGE_WIDTH / (gateCount + 1));
+        phaseGates.push(
+            { id: `SOLID_GATE_${stageIndex}_${i}_A`, phase: 'SOLID', x: baseX - 120, y: 470, width: 42, height: 70, link: `SOLID_GATE_${stageIndex}_${i}_B`, cooldown: 0 },
+            { id: `SOLID_GATE_${stageIndex}_${i}_B`, phase: 'SOLID', x: baseX + 520, y: 220, width: 42, height: 70, link: `SOLID_GATE_${stageIndex}_${i}_A`, cooldown: 0 },
+            { id: `ETHER_GATE_${stageIndex}_${i}_A`, phase: 'ETHER', x: baseX - 100, y: 440, width: 48, height: 72, link: `ETHER_GATE_${stageIndex}_${i}_B`, cooldown: 0 },
+            { id: `ETHER_GATE_${stageIndex}_${i}_B`, phase: 'ETHER', x: baseX + 470, y: 210, width: 48, height: 72, link: `ETHER_GATE_${stageIndex}_${i}_A`, cooldown: 0 }
+        );
     }
 
     stageStartTime = Date.now();
