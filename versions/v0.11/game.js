@@ -222,7 +222,6 @@ const stagePits = [];
 
 // フェーズシャード（ゲートの代替収集物）
 const phaseShards = [];
-let apexCharge = 0;
 
 // フローティングテキスト生成
 function addFloatingText(x, y, text, color = '#fff', size = 16) {
