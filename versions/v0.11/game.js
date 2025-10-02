@@ -12,8 +12,6 @@ const INVINCIBLE_FRAMES = 90;
 const ECHO_LIFETIME_FRAMES = 160;
 const ECHO_FADE_START = 60;
 const ECHO_GRAVITY_SCALE = 0.85;
-const GATE_COOLDOWN_FRAMES = 90;
-const PLAYER_GATE_COOLDOWN = 36;
 const COMBO_TIMER_MAX = 240;
 const ECHO_SWAP_COOLDOWN = 120;
 const ECHO_SWAP_PULSE_RADIUS = 110;
@@ -169,6 +167,7 @@ let stageStartTime = 0;
 let stageClearTime = 0;
 let maxComboReached = 0;
 let apexTimer = 0;
+let apexCharge = 0;
 
 const apexSatellites = [];
 
@@ -221,9 +220,9 @@ const activePowerups = {
 // ピット（穴）の定義
 const stagePits = [];
 
-// フェーズゲート
-const phaseGates = [];
-let playerGateCooldown = 0;
+// フェーズシャード（ゲートの代替収集物）
+const phaseShards = [];
+let apexCharge = 0;
 
 // フローティングテキスト生成
 function addFloatingText(x, y, text, color = '#fff', size = 16) {
@@ -869,6 +868,57 @@ function updatePhasePowerups() {
     }
 }
 
+function collectPhaseShard(shard, sourcePhase = currentPhase) {
+    if (shard.collected) {
+        return;
+    }
+    shard.collected = true;
+    apexCharge = Math.min(3, apexCharge + 1);
+    const shardPhase = shard.phase === 'BOTH' ? sourcePhase : shard.phase;
+    addFloatingText(shard.x, shard.renderY ?? shard.y, `Shard ${apexCharge}/3`, levelPhases[currentPhase].accent, 14);
+    phaseRipples.push({
+        x: shard.x,
+        y: (shard.renderY ?? shard.y),
+        radius: 22,
+        alpha: 0.55,
+        phase: shardPhase
+    });
+
+    if (apexCharge >= 3) {
+        apexCharge = 0;
+        activePowerups.SURGE = Math.max(activePowerups.SURGE, Math.floor(POWERUP_SURGE_DURATION / 2));
+        activePowerups.STORM = Math.max(activePowerups.STORM, Math.floor(POWERUP_STORM_DURATION / 2));
+        activateApexResonance();
+    }
+}
+
+function updatePhaseShards() {
+    for (let shard of phaseShards) {
+        if (shard.collected) {
+            continue;
+        }
+
+        shard.floatOffset += 0.05;
+        shard.renderY = shard.y + Math.sin(shard.floatOffset) * 10;
+
+        const activeForPhase = shard.phase === 'BOTH' || shard.phase === currentPhase;
+        if (!activeForPhase || gameState !== 'playing') {
+            continue;
+        }
+
+        const shardRect = {
+            x: shard.x - 14,
+            y: shard.renderY - 14,
+            width: 28,
+            height: 28
+        };
+
+        if (checkCollision(player, shardRect)) {
+            collectPhaseShard(shard);
+        }
+    }
+}
+
 function updateActivePowerups() {
     if (activePowerups.SURGE > 0) {
         activePowerups.SURGE -= 1;
@@ -964,6 +1014,22 @@ function updateApexSatellites() {
                 phase: ripplePhase
             });
             addFloatingText(orb.x, orb.renderY, `+${points}`, levelPhases[ripplePhase].accent, 12);
+        }
+
+        for (let shard of phaseShards) {
+            if (shard.collected) {
+                continue;
+            }
+            const shardRect = {
+                x: shard.x - 14,
+                y: (shard.renderY ?? shard.y) - 14,
+                width: 28,
+                height: 28
+            };
+            if (!checkCircleRect(satellite.x, satellite.y, APEX_SATELLITE_RADIUS, shardRect)) {
+                continue;
+            }
+            collectPhaseShard(shard, satellite.phase === 'BOTH' ? currentPhase : satellite.phase);
         }
     }
 
@@ -1068,74 +1134,6 @@ function checkPitCollision() {
         }
     }
     return false;
-}
-
-function updatePhaseGates() {
-    if (playerGateCooldown > 0) {
-        playerGateCooldown -= 1;
-    }
-
-    for (let gate of phaseGates) {
-        if (gate.cooldown > 0) {
-            gate.cooldown -= 1;
-        }
-    }
-
-    for (let gate of phaseGates) {
-        if (gate.phase !== currentPhase) {
-            continue;
-        }
-        if (playerGateCooldown > 0 || gate.cooldown > 0) {
-            continue;
-        }
-
-        const gateRect = {
-            x: gate.x,
-            y: gate.y,
-            width: gate.width,
-            height: gate.height
-        };
-
-        if (!checkCollision(player, gateRect)) {
-            continue;
-        }
-
-        const targetGate = phaseGates.find(candidate => candidate.id === gate.link);
-        if (!targetGate) {
-            continue;
-        }
-
-        const targetCenterX = targetGate.x + targetGate.width / 2;
-        const targetCenterY = targetGate.y + targetGate.height / 2;
-
-        player.x = targetCenterX - player.width / 2;
-        player.y = targetCenterY - player.height / 2;
-        player.velocityY = Math.min(player.velocityY, -6);
-        player.velocityX *= 0.35;
-        player.onGround = false;
-        playerGateCooldown = PLAYER_GATE_COOLDOWN;
-        gate.cooldown = GATE_COOLDOWN_FRAMES;
-        targetGate.cooldown = GATE_COOLDOWN_FRAMES;
-        comboTimer = Math.max(comboTimer, 90);
-
-        player.x = Math.max(0, Math.min(player.x, STAGE_WIDTH - player.width));
-        player.y = Math.max(0, Math.min(player.y, canvas.height - player.height));
-
-        phaseRipples.push({
-            x: gate.x + gate.width / 2,
-            y: gate.y + gate.height / 2,
-            radius: 26,
-            alpha: 0.5,
-            phase: gate.phase
-        });
-        phaseRipples.push({
-            x: targetGate.x + targetGate.width / 2,
-            y: targetGate.y + targetGate.height / 2,
-            radius: 34,
-            alpha: 0.45,
-            phase: targetGate.phase
-        });
-    }
 }
 
 function updatePhaseShockwaves() {
@@ -1283,11 +1281,11 @@ function loadStage(stageIndex) {
     levelPhases.SOLID.platforms = generatePlatformsForStage(STAGE_WIDTH, 'SOLID');
     levelPhases.ETHER.platforms = generatePlatformsForStage(STAGE_WIDTH, 'ETHER');
 
-    // アイテムとピット・ゲートをリセット
+    // アイテムとピット・シャードをリセット
     phaseOrbs.length = 0;
     phasePowerups.length = 0;
     stagePits.length = 0;
-    phaseGates.length = 0;
+    phaseShards.length = 0;
 
     // オーブを配置
     const orbCount = Math.floor(STAGE_WIDTH / 300) + 5;
@@ -1332,16 +1330,16 @@ function loadStage(stageIndex) {
         });
     }
 
-    // ゲートを配置
-    const gateCount = Math.min(3, Math.floor(STAGE_WIDTH / 1200));
-    for (let i = 0; i < gateCount; i++) {
-        const baseX = (i + 1) * (STAGE_WIDTH / (gateCount + 1));
-        phaseGates.push(
-            { id: `SOLID_GATE_${stageIndex}_${i}_A`, phase: 'SOLID', x: baseX - 120, y: 470, width: 42, height: 70, link: `SOLID_GATE_${stageIndex}_${i}_B`, cooldown: 0 },
-            { id: `SOLID_GATE_${stageIndex}_${i}_B`, phase: 'SOLID', x: baseX + 520, y: 220, width: 42, height: 70, link: `SOLID_GATE_${stageIndex}_${i}_A`, cooldown: 0 },
-            { id: `ETHER_GATE_${stageIndex}_${i}_A`, phase: 'ETHER', x: baseX - 100, y: 440, width: 48, height: 72, link: `ETHER_GATE_${stageIndex}_${i}_B`, cooldown: 0 },
-            { id: `ETHER_GATE_${stageIndex}_${i}_B`, phase: 'ETHER', x: baseX + 470, y: 210, width: 48, height: 72, link: `ETHER_GATE_${stageIndex}_${i}_A`, cooldown: 0 }
-        );
+    // フェーズシャードを配置
+    const shardCount = Math.max(3, Math.floor(STAGE_WIDTH / 1400));
+    for (let i = 0; i < shardCount; i++) {
+        phaseShards.push({
+            x: 500 + (i * STAGE_WIDTH / shardCount) + Math.random() * 120,
+            y: 220 + Math.random() * 250,
+            phase: phases[Math.floor(Math.random() * phases.length)],
+            collected: false,
+            floatOffset: Math.random() * Math.PI * 2
+        });
     }
 
     stageStartTime = Date.now();
@@ -1366,10 +1364,10 @@ function resetStage() {
     phaseEchoes.length = 0;
     floatingTexts.length = 0;
     phaseShockwaves.length = 0;
-    playerGateCooldown = 0;
     echoSwapCooldown = 0;
     apexTimer = 0;
     apexSatellites.length = 0;
+    apexCharge = 0;
     activePowerups.SURGE = 0;
     activePowerups.STORM = 0;
     for (let orb of phaseOrbs) {
@@ -1380,8 +1378,8 @@ function resetStage() {
         powerup.collected = false;
         powerup.respawnTimer = 0;
     }
-    for (let gate of phaseGates) {
-        gate.cooldown = 0;
+    for (let shard of phaseShards) {
+        shard.collected = false;
     }
 }
 
@@ -1545,6 +1543,51 @@ function drawPlayerTrail() {
     }
 }
 
+function drawPhaseShards() {
+    for (let shard of phaseShards) {
+        if (shard.collected) {
+            continue;
+        }
+
+        const isActivePhase = shard.phase === 'BOTH' || shard.phase === currentPhase;
+        const shardState = shard.phase === 'BOTH'
+            ? (Math.sin(frameCounter * 0.2) > 0 ? levelPhases.SOLID : levelPhases.ETHER)
+            : levelPhases[shard.phase];
+
+        ctx.save();
+        ctx.globalAlpha = isActivePhase ? 0.9 : 0.4;
+        ctx.translate(shard.x, shard.renderY ?? shard.y);
+        ctx.rotate(Math.sin(shard.floatOffset) * 0.3);
+        ctx.fillStyle = shardState.accent;
+        ctx.beginPath();
+        ctx.moveTo(0, -16);
+        ctx.lineTo(12, 0);
+        ctx.lineTo(0, 16);
+        ctx.lineTo(-12, 0);
+        ctx.closePath();
+        ctx.fill();
+
+        ctx.globalAlpha *= 0.6;
+        ctx.strokeStyle = '#ffffff';
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.moveTo(0, -18);
+        ctx.lineTo(14, 0);
+        ctx.lineTo(0, 18);
+        ctx.lineTo(-14, 0);
+        ctx.closePath();
+        ctx.stroke();
+
+        ctx.globalAlpha *= 0.45;
+        ctx.fillStyle = shardState.echoColor;
+        ctx.beginPath();
+        ctx.arc(0, 0, 6 + Math.sin(frameCounter * 0.25) * 2, 0, Math.PI * 2);
+        ctx.fill();
+
+        ctx.restore();
+    }
+}
+
 function drawPits() {
     for (let pit of stagePits) {
         ctx.save();
@@ -1560,48 +1603,6 @@ function drawPits() {
         ctx.stroke();
 
         ctx.restore();
-    }
-}
-
-function drawPhaseGates() {
-    for (let gate of phaseGates) {
-        const state = levelPhases[gate.phase];
-        const isActive = gate.phase === currentPhase;
-        const pulse = Math.sin((frameCounter + gate.x) * 0.08) * 0.5 + 1.2;
-
-        ctx.save();
-        ctx.translate(gate.x + gate.width / 2, gate.y + gate.height / 2);
-        ctx.globalAlpha = isActive ? 0.85 : 0.25;
-        ctx.strokeStyle = state.accent;
-        ctx.lineWidth = 3;
-        ctx.beginPath();
-        ctx.ellipse(0, 0, (gate.width * 0.55) * pulse, (gate.height * 0.35) * (2 - pulse), 0, 0, Math.PI * 2);
-        ctx.stroke();
-
-        ctx.globalAlpha *= 0.6;
-        ctx.fillStyle = isActive ? 'rgba(255,255,255,0.22)' : 'rgba(255,255,255,0.12)';
-        ctx.beginPath();
-        ctx.ellipse(0, 0, gate.width * 0.35, gate.height * 0.2 + Math.sin(frameCounter * 0.16) * 4, 0, 0, Math.PI * 2);
-        ctx.fill();
-
-        if (gate.cooldown > 0) {
-            ctx.globalAlpha = 0.45 + Math.sin((frameCounter + gate.cooldown) * 0.25) * 0.25;
-            ctx.strokeStyle = '#ffffff';
-            ctx.lineWidth = 2;
-            ctx.beginPath();
-            ctx.ellipse(0, 0, gate.width * 0.68, gate.height * 0.4, 0, 0, Math.PI * 2);
-            ctx.stroke();
-        }
-
-        ctx.restore();
-
-        if (!isActive) {
-            ctx.save();
-            ctx.globalAlpha = 0.1;
-            ctx.fillStyle = state.accent;
-            ctx.fillRect(gate.x, gate.y, gate.width, gate.height);
-            ctx.restore();
-        }
     }
 }
 
@@ -1868,6 +1869,15 @@ function drawUI() {
         ctx.fillText(`${Math.ceil(apexTimer / 60)}s`, 150, nextStatusY + 24);
         ctx.font = '12px "Arial"';
         nextStatusY += 24;
+    } else if (apexCharge > 0) {
+        ctx.fillStyle = '#ffd2ff';
+        ctx.fillText(`Apex Charge: ${apexCharge}/3`, 36, nextStatusY + 12);
+        ctx.fillStyle = 'rgba(255,255,255,0.3)';
+        ctx.fillRect(36, nextStatusY + 18, 140, 8);
+        ctx.fillStyle = '#ff9dff';
+        ctx.fillRect(36, nextStatusY + 18, 140 * (apexCharge / 3), 8);
+        ctx.fillStyle = '#fff';
+        nextStatusY += 24;
     }
 
     ctx.restore();
@@ -1998,12 +2008,12 @@ function draw() {
     drawGhostPlatforms(otherState.platforms, otherState.accent);
     drawPlatforms(activeState.platforms, activeState.platformColor, activeState.platformShadow);
     drawPits();
-    drawPhaseGates();
     drawPhaseRipples();
     drawPhaseShockwaves();
     drawApexSatellites();
     drawPlayerTrail();
     drawPowerups();
+    drawPhaseShards();
     drawOrbs();
     drawEnemies();
     drawPhaseEchoes();
@@ -2046,10 +2056,10 @@ function gameLoop() {
 
     if (gameState === 'playing') {
         updatePlayer();
-        updatePhaseGates();
         updatePhaseEchoes();
         updatePhaseShockwaves();
         updatePhaseOrbs();
+        updatePhaseShards();
         updateApexSatellites();
         updateEnemies();
         updatePlayerTrail();
@@ -2077,6 +2087,7 @@ function gameLoop() {
     } else {
         updatePhaseEchoes();
         updatePhaseShockwaves();
+        updatePhaseShards();
         updateApexSatellites();
         updateFloatingTexts();
     }
