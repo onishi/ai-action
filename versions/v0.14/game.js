@@ -1110,31 +1110,22 @@ function updatePhaseEchoes() {
 }
 
 function checkPitCollision() {
-    // ピットとの衝突判定（全身が落ちたら死ぬ）
-    for (let pit of stagePits) {
-        // プレイヤーの中心がピット内にあるかチェック
-        const playerCenterX = player.x + player.width / 2;
-        const playerCenterY = player.y + player.height / 2;
-
-        if (playerCenterX > pit.x && playerCenterX < pit.x + pit.width) {
-            // プレイヤーの大部分（70%以上）がピットより下にある場合のみ死ぬ
-            if (player.y + player.height * 0.7 >= pit.y) {
-                // ピットに落ちた
-                lives -= 1;
-                if (lives <= 0) {
-                    gameState = 'gameover';
-                } else {
-                    player.x = 100;
-                    player.y = 100;
-                    player.velocityX = 0;
-                    player.velocityY = 0;
-                    invincibleTimer = INVINCIBLE_FRAMES;
-                    combo = 0;
-                    comboTimer = 0;
-                }
-                return true;
-            }
+    // プレイヤーが画面外（穴）に落ちたかチェック
+    if (player.y > canvas.height) {
+        // ピットに落ちた
+        lives -= 1;
+        if (lives <= 0) {
+            gameState = 'gameover';
+        } else {
+            player.x = 100;
+            player.y = 100;
+            player.velocityX = 0;
+            player.velocityY = 0;
+            invincibleTimer = INVINCIBLE_FRAMES;
+            combo = 0;
+            comboTimer = 0;
         }
+        return true;
     }
     return false;
 }
@@ -1331,6 +1322,50 @@ function loadStage(stageIndex) {
             width: pitWidth,
             height: 50
         });
+    }
+
+    // 地面プラットフォームにピットの穴を開ける
+    for (const phase of ['SOLID', 'ETHER']) {
+        const platforms = levelPhases[phase].platforms;
+        const groundPlatform = platforms[0]; // 最初の要素が地面
+
+        if (stagePits.length === 0) {
+            continue;
+        }
+
+        // ピットをX座標でソート
+        const sortedPits = [...stagePits].sort((a, b) => a.x - b.x);
+
+        // 新しい地面セグメントを作成
+        const newGroundSegments = [];
+        let currentX = 0;
+
+        for (const pit of sortedPits) {
+            // ピットの前の地面セグメントを追加
+            if (currentX < pit.x) {
+                newGroundSegments.push({
+                    x: currentX,
+                    y: 550,
+                    width: pit.x - currentX,
+                    height: 50
+                });
+            }
+            // ピットの後ろから次のセグメント開始
+            currentX = pit.x + pit.width;
+        }
+
+        // 最後のセグメントを追加
+        if (currentX < STAGE_WIDTH) {
+            newGroundSegments.push({
+                x: currentX,
+                y: 550,
+                width: STAGE_WIDTH - currentX,
+                height: 50
+            });
+        }
+
+        // 地面プラットフォームを新しいセグメントで置き換え
+        platforms.splice(0, 1, ...newGroundSegments);
     }
 
     // フェーズシャードを配置
