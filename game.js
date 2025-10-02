@@ -223,6 +223,7 @@ const stagePits = [];
 
 // フェーズゲート
 const phaseGates = [];
+let playerGateCooldown = 0;
 
 // フローティングテキスト生成
 function addFloatingText(x, y, text, color = '#fff', size = 16) {
@@ -1365,6 +1366,7 @@ function resetStage() {
     phaseEchoes.length = 0;
     floatingTexts.length = 0;
     phaseShockwaves.length = 0;
+    playerGateCooldown = 0;
     echoSwapCooldown = 0;
     apexTimer = 0;
     apexSatellites.length = 0;
@@ -1558,6 +1560,48 @@ function drawPits() {
         ctx.stroke();
 
         ctx.restore();
+    }
+}
+
+function drawPhaseGates() {
+    for (let gate of phaseGates) {
+        const state = levelPhases[gate.phase];
+        const isActive = gate.phase === currentPhase;
+        const pulse = Math.sin((frameCounter + gate.x) * 0.08) * 0.5 + 1.2;
+
+        ctx.save();
+        ctx.translate(gate.x + gate.width / 2, gate.y + gate.height / 2);
+        ctx.globalAlpha = isActive ? 0.85 : 0.25;
+        ctx.strokeStyle = state.accent;
+        ctx.lineWidth = 3;
+        ctx.beginPath();
+        ctx.ellipse(0, 0, (gate.width * 0.55) * pulse, (gate.height * 0.35) * (2 - pulse), 0, 0, Math.PI * 2);
+        ctx.stroke();
+
+        ctx.globalAlpha *= 0.6;
+        ctx.fillStyle = isActive ? 'rgba(255,255,255,0.22)' : 'rgba(255,255,255,0.12)';
+        ctx.beginPath();
+        ctx.ellipse(0, 0, gate.width * 0.35, gate.height * 0.2 + Math.sin(frameCounter * 0.16) * 4, 0, 0, Math.PI * 2);
+        ctx.fill();
+
+        if (gate.cooldown > 0) {
+            ctx.globalAlpha = 0.45 + Math.sin((frameCounter + gate.cooldown) * 0.25) * 0.25;
+            ctx.strokeStyle = '#ffffff';
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+            ctx.ellipse(0, 0, gate.width * 0.68, gate.height * 0.4, 0, 0, Math.PI * 2);
+            ctx.stroke();
+        }
+
+        ctx.restore();
+
+        if (!isActive) {
+            ctx.save();
+            ctx.globalAlpha = 0.1;
+            ctx.fillStyle = state.accent;
+            ctx.fillRect(gate.x, gate.y, gate.width, gate.height);
+            ctx.restore();
+        }
     }
 }
 
@@ -1954,6 +1998,7 @@ function draw() {
     drawGhostPlatforms(otherState.platforms, otherState.accent);
     drawPlatforms(activeState.platforms, activeState.platformColor, activeState.platformShadow);
     drawPits();
+    drawPhaseGates();
     drawPhaseRipples();
     drawPhaseShockwaves();
     drawApexSatellites();
