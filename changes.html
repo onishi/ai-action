@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>バージョン履歴 - 横スクロールジャンプアクション</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Arial', sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            padding: 40px 20px;
+            min-height: 100vh;
+        }
+
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 16px;
+            padding: 40px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+        }
+
+        h1 {
+            color: #333;
+            margin-bottom: 30px;
+            text-align: center;
+            font-size: 32px;
+        }
+
+        .version {
+            border-left: 4px solid #667eea;
+            padding-left: 20px;
+            margin-bottom: 30px;
+        }
+
+        .version h2 {
+            color: #667eea;
+            margin-bottom: 10px;
+            font-size: 24px;
+        }
+
+        .version .date {
+            color: #999;
+            font-size: 14px;
+            margin-bottom: 10px;
+        }
+
+        .version ul {
+            margin-left: 20px;
+            margin-bottom: 10px;
+        }
+
+        .version li {
+            color: #555;
+            margin-bottom: 5px;
+        }
+
+        .version a {
+            display: inline-block;
+            margin-top: 10px;
+            padding: 8px 16px;
+            background: #667eea;
+            color: white;
+            text-decoration: none;
+            border-radius: 5px;
+            font-size: 14px;
+            transition: background 0.3s;
+        }
+
+        .version a:hover {
+            background: #764ba2;
+        }
+
+        .current {
+            background: #f0f0f0;
+            padding: 15px;
+            border-radius: 8px;
+            margin-bottom: 30px;
+        }
+
+        .current a {
+            color: #667eea;
+            font-weight: bold;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>バージョン履歴</h1>
+
+        <div class="current">
+            <p><strong>最新版:</strong> <a href="index.html">v0.1 をプレイ</a></p>
+        </div>
+
+        <div class="version">
+            <h2>v0.1</h2>
+            <div class="date">Claude による実装</div>
+            <ul>
+                <li>基本的なゲームエンジンの実装</li>
+                <li>プレイヤーキャラクター（赤い四角）の追加</li>
+                <li>左右移動機能（←→キー）</li>
+                <li>ジャンプ機能（スペースキー）</li>
+                <li>重力と物理演算の実装</li>
+                <li>複数のプラットフォーム配置</li>
+                <li>プラットフォームとの衝突判定</li>
+                <li>基本的なUI/デザイン</li>
+            </ul>
+            <a href="versions/v0.1/index.html">v0.1 をプレイ</a>
+        </div>
+    </div>
+</body>
+</html>
