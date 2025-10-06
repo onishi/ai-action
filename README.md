@@ -60,7 +60,7 @@ versions/v0.1/index.html のように、バージョンごとにディレクト�
 
 # 現在の実装状況
 
-## バージョン: v0.19
+## バージョン: v0.20
 
 ## 実装済み機能
 
@@ -217,9 +217,9 @@ versions/v0.1/index.html のように、バージョンごとにディレクト�
 - 衛星エコーもシャードを自動回収し、探索ルートの自由度が向上
 - 取得時にフェーズエネルギーとスコアを獲得、タイムアタックでも有利
 
-### ステージシステム（v0.9, v0.18で調整）
+### ステージシステム（v0.9, v0.18, v0.20で調整）
 - **6つのステージ**:
-  1. Phase Introduction（3200px / 180秒）— Aurora Steppe
+  1. Phase Introduction（3800px / 190秒）— Aurora Steppe（v0.20で延長）
   2. Echo Mastery（4000px / 210秒）— Crystal Expanse
   3. Final Dimension（5000px / 240秒）— Volcanic Rift
   4. Neon Cityscape（4500px / 220秒）— サイバーパンク都市（v0.16）
@@ -279,7 +279,8 @@ versions/v0.1/index.html のように、バージョンごとにディレクト�
 - `versions/v0.16/` - v0.16のアーカイブ
 - `versions/v0.17/` - v0.17のアーカイブ
 - `versions/v0.18/` - v0.18のアーカイブ
-- `versions/v0.19/` - v0.19のアーカイブ（最新ビルド）
+- `versions/v0.19/` - v0.19のアーカイブ
+- `versions/v0.20/` - v0.20のアーカイブ（最新ビルド - ゲームバランス調整版）
 
 ## 次の実装候補（Codex へのバトンタッチ）
 - Aurora/Crystal/Volcanic 向けにも軽量なギミック（風パネル、シールドスクリーン、噴火タイマー）を追加して序盤から導線を多様化
