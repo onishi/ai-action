@@ -981,6 +981,7 @@ const activePowerups = {
 
 // ピット（穴）の定義
 const stagePits = [];
+const stageGimmicks = [];
 
 // フェーズシャード（ゲートの代替収集物）
 const phaseShards = [];
@@ -1438,7 +1439,9 @@ function updatePlayer() {
     const stormActive = isPowerupActive('STORM');
     const baseHorizontal = currentPhase === 'ETHER' ? MOVE_SPEED + 1.2 : MOVE_SPEED;
     const horizontalSpeed = baseHorizontal + (surgeActive ? 1.5 : 0);
-    const gravity = (currentPhase === 'ETHER' ? GRAVITY * 0.7 : GRAVITY) * (stormActive ? 0.92 : 1);
+    const envEffects = evaluateStageGimmickEffects();
+    const gravityBase = (currentPhase === 'ETHER' ? GRAVITY * 0.7 : GRAVITY) * (stormActive ? 0.92 : 1);
+    const gravity = gravityBase * envEffects.gravityScale;
     const jumpStrengthBase = currentPhase === 'ETHER' ? JUMP_STRENGTH * 0.9 : JUMP_STRENGTH;
     const jumpStrength = surgeActive ? jumpStrengthBase * 1.12 : jumpStrengthBase;
 
@@ -1454,6 +1457,21 @@ function updatePlayer() {
         }
     }
 
+    if (envEffects.driftX !== 0) {
+        player.velocityX += envEffects.driftX;
+    }
+
+    if (envEffects.dashImpulse !== null) {
+        player.velocityX = envEffects.dashImpulse;
+        if (player.velocityY > -3) {
+            player.velocityY = -3;
+        }
+    }
+
+    if (envEffects.frictionScale !== 1) {
+        player.velocityX *= envEffects.frictionScale;
+    }
+
     // ジャンプ
     if (keys[' '] && player.onGround) {
         player.velocityY = jumpStrength;
@@ -1463,6 +1481,10 @@ function updatePlayer() {
 
     // 重力適用
     player.velocityY += gravity;
+
+    if (envEffects.verticalBoost !== null && player.velocityY > envEffects.verticalBoost) {
+        player.velocityY = envEffects.verticalBoost;
+    }
 
     // 位置更新
     player.x += player.velocityX;
@@ -1712,6 +1734,28 @@ function updatePhaseShards() {
     }
 }
 
+function updateStageGimmicks() {
+    for (let gimmick of stageGimmicks) {
+        if (gimmick.type === 'dashPad') {
+            if (gimmick.cooldown > 0) {
+                gimmick.cooldown -= 1;
+            }
+            gimmick.pulse += 0.08;
+            if (gimmick.flashTimer > 0) {
+                gimmick.flashTimer -= 1;
+            }
+        } else if (gimmick.type === 'bubbleLift') {
+            gimmick.waveOffset += gimmick.waveSpeed;
+            gimmick.y = gimmick.baseY + Math.sin(gimmick.waveOffset) * gimmick.waveAmplitude;
+        } else if (gimmick.type === 'gravityWell') {
+            gimmick.swirl += gimmick.swirlSpeed;
+            if (gimmick.flashTimer > 0) {
+                gimmick.flashTimer -= 1;
+            }
+        }
+    }
+}
+
 function updateActivePowerups() {
     if (activePowerups.SURGE > 0) {
         activePowerups.SURGE -= 1;
@@ -1901,6 +1945,72 @@ function updatePhaseEchoes() {
             phaseEchoes.splice(i, 1);
         }
     }
+}
+
+function evaluateStageGimmickEffects() {
+    const effects = {
+        gravityScale: 1,
+        frictionScale: 1,
+        driftX: 0,
+        verticalBoost: null,
+        dashImpulse: null
+    };
+
+    if (gameState !== 'playing') {
+        return effects;
+    }
+
+    if (stageGimmicks.length === 0) {
+        return effects;
+    }
+
+    const playerCenterX = player.x + player.width / 2;
+    const playerCenterY = player.y + player.height / 2;
+    const playerFeetY = player.y + player.height;
+
+    for (let gimmick of stageGimmicks) {
+        if (gimmick.type === 'dashPad') {
+            const withinX = player.x + player.width > gimmick.x && player.x < gimmick.x + gimmick.width;
+            const withinY = playerFeetY >= gimmick.y - 6 && playerFeetY <= gimmick.y + gimmick.height + 2;
+            if (withinX && withinY && player.onGround && gimmick.cooldown <= 0) {
+                const surgeBonus = isPowerupActive('SURGE') ? 1.25 : 1;
+                effects.dashImpulse = (gimmick.boost * surgeBonus) * gimmick.direction;
+                gimmick.cooldown = 45;
+                gimmick.flashTimer = 18;
+                const accent = currentStageTheme?.palettes?.SOLID?.accent ?? '#00ffff';
+                addFloatingText(playerCenterX, player.y - 12, 'NEON DASH', accent, 14);
+            }
+        } else if (gimmick.type === 'bubbleLift') {
+            const dx = playerCenterX - gimmick.x;
+            const dy = playerCenterY - gimmick.y;
+            const distSq = dx * dx + dy * dy;
+            if (distSq <= gimmick.radius * gimmick.radius) {
+                effects.gravityScale = Math.min(effects.gravityScale, 0.65);
+                const upward = -gimmick.strength;
+                if (effects.verticalBoost === null || upward < effects.verticalBoost) {
+                    effects.verticalBoost = upward;
+                }
+                effects.frictionScale = Math.min(effects.frictionScale, 0.9);
+                effects.driftX += Math.sin(gimmick.waveOffset * 2 + frameCounter * 0.02) * 0.35;
+            }
+        } else if (gimmick.type === 'gravityWell') {
+            const dx = playerCenterX - gimmick.x;
+            const dy = playerCenterY - gimmick.y;
+            const distance = Math.sqrt(dx * dx + dy * dy);
+            if (distance <= gimmick.radius) {
+                effects.gravityScale = Math.min(effects.gravityScale, gimmick.gravityScale);
+                const angle = Math.atan2(dy, dx);
+                effects.driftX += Math.cos(angle + Math.PI / 2) * 0.45;
+                const upward = -2.2;
+                if (effects.verticalBoost === null || upward < effects.verticalBoost) {
+                    effects.verticalBoost = upward;
+                }
+                gimmick.flashTimer = 10;
+            }
+        }
+    }
+
+    return effects;
 }
 
 function checkPitCollision() {
@@ -2177,7 +2287,71 @@ function loadStage(stageIndex) {
         });
     }
 
+    populateStageGimmicks(stage);
+
     stageStartTime = 0;
+}
+
+function populateStageGimmicks(stage) {
+    stageGimmicks.length = 0;
+
+    if (!stage || !stage.theme) {
+        return;
+    }
+
+    if (stage.theme.key === 'neon-cityscape') {
+        const padCount = Math.max(3, Math.floor(STAGE_WIDTH / 900));
+        for (let i = 0; i < padCount; i++) {
+            const baseX = 360 + i * (STAGE_WIDTH / padCount) + (Math.random() - 0.5) * 160;
+            const baseY = 470 - (i % 2 === 0 ? 0 : 60) + (Math.random() - 0.5) * 40;
+            stageGimmicks.push({
+                type: 'dashPad',
+                x: Math.max(160, Math.min(baseX, STAGE_WIDTH - 200)),
+                y: Math.max(220, baseY),
+                width: 180,
+                height: 18,
+                direction: i % 2 === 0 ? 1 : -1,
+                boost: 13 + Math.random() * 2,
+                cooldown: 0,
+                flashTimer: 0,
+                pulse: Math.random() * Math.PI * 2
+            });
+        }
+    } else if (stage.theme.key === 'deep-ocean') {
+        const liftCount = Math.max(4, Math.floor(STAGE_WIDTH / 1100));
+        for (let i = 0; i < liftCount; i++) {
+            const baseX = 420 + i * (STAGE_WIDTH / liftCount) + (Math.random() - 0.5) * 200;
+            const baseY = 320 + (i % 2 === 0 ? 60 : -20) + (Math.random() - 0.5) * 60;
+            const radius = 90 + Math.random() * 30;
+            stageGimmicks.push({
+                type: 'bubbleLift',
+                x: Math.max(220, Math.min(baseX, STAGE_WIDTH - 220)),
+                y: baseY,
+                baseY,
+                radius,
+                strength: 5 + Math.random() * 2.5,
+                waveSpeed: 0.01 + Math.random() * 0.01,
+                waveAmplitude: 26 + Math.random() * 18,
+                waveOffset: Math.random() * Math.PI * 2
+            });
+        }
+    } else if (stage.theme.key === 'astral-void') {
+        const wellCount = Math.max(3, Math.floor(STAGE_WIDTH / 1500));
+        for (let i = 0; i < wellCount; i++) {
+            const baseX = 560 + i * (STAGE_WIDTH / wellCount) + (Math.random() - 0.5) * 220;
+            const baseY = 280 + (Math.random() - 0.5) * 180;
+            stageGimmicks.push({
+                type: 'gravityWell',
+                x: Math.max(320, Math.min(baseX, STAGE_WIDTH - 320)),
+                y: baseY,
+                radius: 160 + Math.random() * 40,
+                gravityScale: 0.52 + Math.random() * 0.12,
+                swirl: Math.random() * Math.PI * 2,
+                swirlSpeed: 0.015 + Math.random() * 0.01,
+                flashTimer: 0
+            });
+        }
+    }
 }
 
 function resetStage() {
@@ -2218,6 +2392,20 @@ function resetStage() {
     }
     for (let shard of phaseShards) {
         shard.collected = false;
+    }
+    for (let gimmick of stageGimmicks) {
+        if ('cooldown' in gimmick) {
+            gimmick.cooldown = 0;
+        }
+        if ('flashTimer' in gimmick) {
+            gimmick.flashTimer = 0;
+        }
+        if (gimmick.type === 'bubbleLift') {
+            gimmick.y = gimmick.baseY;
+        }
+        if (gimmick.type === 'gravityWell') {
+            gimmick.swirl = gimmick.swirl ?? 0;
+        }
     }
 }
 
@@ -2856,6 +3044,104 @@ function drawPhaseRipples() {
         ctx.arc(ripple.x, ripple.y, ripple.radius, 0, Math.PI * 2);
         ctx.stroke();
         ctx.restore();
+    }
+}
+
+function drawStageGimmicks() {
+    if (stageGimmicks.length === 0) {
+        return;
+    }
+
+    for (let gimmick of stageGimmicks) {
+        if (gimmick.type === 'dashPad') {
+            const accent = currentStageTheme?.palettes?.SOLID?.accent ?? '#00ffff';
+            const detail = currentStageTheme?.palettes?.SOLID?.detailColor ?? '#ff69ff';
+            const pulse = (Math.sin(gimmick.pulse) + 1) * 0.5;
+            ctx.save();
+            ctx.globalAlpha = 0.85;
+            const gradient = ctx.createLinearGradient(gimmick.x, gimmick.y, gimmick.x, gimmick.y + gimmick.height);
+            gradient.addColorStop(0, detail);
+            gradient.addColorStop(1, accent);
+            ctx.fillStyle = gradient;
+            ctx.fillRect(gimmick.x, gimmick.y, gimmick.width, gimmick.height);
+
+            ctx.globalAlpha = 0.5 + pulse * 0.3;
+            ctx.strokeStyle = 'rgba(255,255,255,0.8)';
+            ctx.lineWidth = 2;
+            ctx.strokeRect(gimmick.x - 4, gimmick.y - 6, gimmick.width + 8, gimmick.height + 12);
+
+            if (gimmick.flashTimer > 0) {
+                ctx.globalAlpha = gimmick.flashTimer / 18;
+                ctx.fillStyle = 'rgba(255,255,255,0.6)';
+                ctx.fillRect(gimmick.x, gimmick.y - 4, gimmick.width, gimmick.height + 8);
+            }
+
+            ctx.restore();
+        } else if (gimmick.type === 'bubbleLift') {
+            ctx.save();
+            const gradient = ctx.createRadialGradient(gimmick.x, gimmick.y, 0, gimmick.x, gimmick.y, gimmick.radius);
+            gradient.addColorStop(0, 'rgba(0, 255, 210, 0.65)');
+            gradient.addColorStop(0.6, 'rgba(0, 170, 255, 0.35)');
+            gradient.addColorStop(1, 'rgba(0, 0, 50, 0)');
+            ctx.fillStyle = gradient;
+            ctx.globalAlpha = 0.85;
+            ctx.beginPath();
+            ctx.arc(gimmick.x, gimmick.y, gimmick.radius, 0, Math.PI * 2);
+            ctx.fill();
+
+            ctx.globalAlpha = 0.35;
+            ctx.strokeStyle = 'rgba(255,255,255,0.4)';
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+            ctx.arc(gimmick.x, gimmick.y, gimmick.radius * (0.6 + 0.15 * Math.sin(gimmick.waveOffset * 2)), 0, Math.PI * 2);
+            ctx.stroke();
+            ctx.restore();
+        } else if (gimmick.type === 'gravityWell') {
+            ctx.save();
+            const gradient = ctx.createRadialGradient(gimmick.x, gimmick.y, 0, gimmick.x, gimmick.y, gimmick.radius);
+            gradient.addColorStop(0, 'rgba(255,255,255,0.25)');
+            gradient.addColorStop(0.6, 'rgba(120, 180, 255, 0.35)');
+            gradient.addColorStop(1, 'rgba(10, 0, 40, 0.0)');
+            ctx.fillStyle = gradient;
+            ctx.globalAlpha = 0.7;
+            ctx.beginPath();
+            ctx.arc(gimmick.x, gimmick.y, gimmick.radius, 0, Math.PI * 2);
+            ctx.fill();
+
+            ctx.globalAlpha = 0.9;
+            ctx.strokeStyle = 'rgba(255,255,255,0.6)';
+            ctx.lineWidth = 3;
+            ctx.beginPath();
+            ctx.arc(gimmick.x, gimmick.y, gimmick.radius * 0.6, 0, Math.PI * 2);
+            ctx.stroke();
+
+            ctx.globalAlpha = 0.5;
+            ctx.strokeStyle = 'rgba(163, 217, 255, 0.9)';
+            ctx.lineWidth = 2;
+            const arcs = 4;
+            ctx.beginPath();
+            for (let i = 0; i < arcs; i++) {
+                const startAngle = gimmick.swirl + (Math.PI * 2 / arcs) * i;
+                const endAngle = startAngle + Math.PI / 2;
+                const radius = gimmick.radius * 0.8;
+                const startX = gimmick.x + Math.cos(startAngle) * radius;
+                const startY = gimmick.y + Math.sin(startAngle) * radius;
+                ctx.moveTo(startX, startY);
+                ctx.arc(gimmick.x, gimmick.y, radius, startAngle, endAngle);
+            }
+            ctx.stroke();
+
+            if (gimmick.flashTimer > 0) {
+                ctx.globalAlpha = gimmick.flashTimer / 12;
+                ctx.strokeStyle = 'rgba(255,255,255,0.85)';
+                ctx.lineWidth = 4;
+                ctx.beginPath();
+                ctx.arc(gimmick.x, gimmick.y, gimmick.radius * 0.45, 0, Math.PI * 2);
+                ctx.stroke();
+            }
+
+            ctx.restore();
+        }
     }
 }
 
@@ -3538,6 +3824,7 @@ function draw() {
     drawGhostPlatforms(otherState.platforms, otherState.accent);
     drawPlatforms(activeState.platforms, activeState);
     drawPits();
+    drawStageGimmicks();
     drawPhaseRipples();
     drawPhaseShockwaves();
     drawApexSatellites();
@@ -3583,9 +3870,10 @@ function draw() {
 
 function gameLoop() {
     handlePhaseShift();
-    handleEchoSwap();
-    updatePhasePowerups();
-    updateActivePowerups();
+   handleEchoSwap();
+   updatePhasePowerups();
+   updateActivePowerups();
+    updateStageGimmicks();
     updateStageAmbience();
 
     if (gameState === 'playing') {
