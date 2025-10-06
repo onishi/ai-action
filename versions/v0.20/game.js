@@ -34,6 +34,7 @@ const stages = [
         width: 3800,
         goalX: 3600,
         timeLimit: 190,
+        moveSpeed: 3.5,
         theme: {
             key: 'aurora-steppe',
             label: 'Aurora Steppe',
@@ -68,6 +69,7 @@ const stages = [
         width: 4000,
         goalX: 3800,
         timeLimit: 210,
+        moveSpeed: 4.0,
         theme: {
             key: 'crystal-expanse',
             label: 'Crystal Expanse',
@@ -102,6 +104,7 @@ const stages = [
         width: 5000,
         goalX: 4800,
         timeLimit: 240,
+        moveSpeed: 4.5,
         theme: {
             key: 'volcanic-rift',
             label: 'Volcanic Rift',
@@ -136,6 +139,7 @@ const stages = [
         width: 4500,
         goalX: 4300,
         timeLimit: 220,
+        moveSpeed: 5.0,
         theme: {
             key: 'neon-cityscape',
             label: 'Neon Cityscape',
@@ -170,6 +174,7 @@ const stages = [
         width: 5500,
         goalX: 5300,
         timeLimit: 260,
+        moveSpeed: 5.0,
         theme: {
             key: 'deep-ocean',
             label: 'Deep Ocean Trench',
@@ -204,6 +209,7 @@ const stages = [
         width: 6000,
         goalX: 5800,
         timeLimit: 280,
+        moveSpeed: 5.0,
         theme: {
             key: 'astral-void',
             label: 'Astral Void',
@@ -1437,7 +1443,8 @@ function updatePlayer() {
     const activePlatforms = activePhase.platforms;
     const surgeActive = isPowerupActive('SURGE');
     const stormActive = isPowerupActive('STORM');
-    const baseHorizontal = currentPhase === 'ETHER' ? MOVE_SPEED + 1.2 : MOVE_SPEED;
+    const stageMoveSpeed = stages[currentStageIndex].moveSpeed || MOVE_SPEED;
+    const baseHorizontal = currentPhase === 'ETHER' ? stageMoveSpeed + 1.2 : stageMoveSpeed;
     const horizontalSpeed = baseHorizontal + (surgeActive ? 1.5 : 0);
     const envEffects = evaluateStageGimmickEffects();
     const gravityBase = (currentPhase === 'ETHER' ? GRAVITY * 0.7 : GRAVITY) * (stormActive ? 0.92 : 1);
